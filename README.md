@@ -12,7 +12,7 @@ The standard tool for this course is RARS. Unfortunately, RARS is built using Ja
 
 This caused me to hit a wall immediately in the first lab: stepping through code. In the UI, a sighted student can click "Step" and immediately see what line is running and which register changed. To do the same thing in the CLI requires a verbose command, manual calculation of steps, and sifting through a massive dump of text just to find one changed value.
 
-I am not new to the prospect of visually impaired students having to do >=2x more work than sighted peers to keep up, especially in the stem field. I have been trying my best to make this not the case or at least a lot less of a case than before. This is another one of those, albeit small, contributions towards that endeavour and making people less afraid to take up STEM courses, and to prevent burnout once in.
+I am not new to the prospect of visually impaired students having to do >=2x more work than sighted peers to keep up, especially in the STEM field. I have been trying my best to make this not the case or at least a lot less of a case than before. This is another one of those, albeit small, contributions towards that endeavour and making people less afraid to take up STEM courses, and to prevent burnout once in.
 
 ## How this solves the problem
 
@@ -23,6 +23,8 @@ Instead of needing to learn complex argument flags and manually parse the output
 ## Features
 
 * Interactive Stepping: Step through your code instruction-by-instruction with a simple key press, mimicking the "Step" button in the UI.
+* Run / Fast Forward: Type `r` to fast-forward execution until the program finishes or hits a breakpoint (useful for loops)
+* Breakpoint Support: Fully supports the `ebreak` instruction. The wrapper detects when the simulator pauses and hands control back to you, allowing for inspection at critical moments.
 * Smart Register Tracking: Automatically detects and announces only the registers that have changed value, so you don't have to scan a full table.
 * Noise Filtering: Strips away the RARS copyright headers and execution logs, delivering clean program output.
 * Crash Reporting: Catches assembler errors and reports the specific line number immediately.
@@ -37,8 +39,7 @@ Hopefully, by the time I'm finished, this can serve as a one-stop solution for a
 **Planned Features:**
 
 * Memory Inspection: A structured way to view memory segments. Right now, scanning memory tables in a linear fashion via the raw CLI dump is a nightmare; we need a way to query specific addresses easily.
-* Breakpoint Management: Interactive commands to run until a specific line or label.
-* An (**Accessible**) UI: I understand that not everyone is a terminal geek like me. Many people still prefer a UI for friendliness. I want to reduce this trend that Access means having to learn an entirely different way of working just to do what everyone else can do in a more beginner-friendly way. I am exploring a text-based UI (TUI) or a simple web front-end to help with this. It would also aid in things like the aforementioned memory inspection problem, as a table could be presented and navigated by screen readers as a table rather than a linear dump.
+* An (Accessible) UI: I understand that not everyone is a terminal geek like me. Many people still prefer a UI for friendliness. I want to reduce this trend that Access means having to learn an entirely different way of working just to do what everyone else can do in a more beginner-friendly way. I am exploring a text-based UI (TUI) or a simple web front-end to help with this. It would also aid in things like the aforementioned memory inspection problem, as a table could be presented and navigated by screen readers as a table rather than a linear dump.
 
 ---
 
@@ -49,7 +50,7 @@ My "dream" scenario involves one of two paths:
 1. A massive PR to RARS: Porting the UI to a modern, accessible Java library (like SWT) or implementing the Java Accessibility API properly into the existing one. The latter alternative, though, I foresee being a web of spaghetti code and hacky workarounds.
 2. A Rewrite in Rust: Rebuilding the entire simulator in Rust. The ecosystem already exists; crates like `riscv` handle the emulation, and `ratatui` could generate a beautiful, screen-reader-accessible terminal UI. Better, but hardest.
 
-I love building software, especially ones that break barriers. However, I do not like doing it halfway or compromising on quality. Optimizing my software for best results by truly knowing conceptually and practically  what goes on behind the scene is, as per my understanding, at the core of computing science, and is why I took this course. Many people can learn how to program these days. Most can code even without touching it now. But writing **good** software is what takes exercising that mental muscle.
+I love building software, especially ones that break barriers. However, I do not like doing it halfway or compromising on quality. Optimizing my software for best results by truly knowing conceptually and practically what goes on behind the scene is, as per my understanding, at the core of computing science, and is why I took this course. Many people can learn how to program these days. Most can code even without touching it now. But writing **good** software is what takes exercising that mental muscle.
 
 Thus, I don't feel confident enough in low-level systems programming *yet* to tackle a full emulator rewrite, but after CMPUT 229, who knows; I might give it a go. If anyone wants to collaborate on that, please reach out.
 
@@ -58,13 +59,18 @@ Thus, I don't feel confident enough in low-level systems programming *yet* to ta
 1. Place the `rars_cli.py` script in the same folder as your `rars.jar`.
 2. Run the script with your assembly file:
 ```bash
-python rars_cli.py lab1-hello.s
+python rars_cli.py file.s
 ```
 
 3. If your program requires arguments, just add them to the end:
 ```bash
-python rars_cli.py lab1-hello.s arg1 arg2
+python rars_cli.py file.s arg1 arg2
 ```
+
+4. Once running, use the following commands:
+    * Enter: Step forward one instruction.
+    * r: Run until the program finishes or hits an `ebreak`.
+    * q: Quit.
 
 ## Conclusion
 
