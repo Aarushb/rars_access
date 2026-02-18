@@ -22,8 +22,8 @@ class RarsSession:
         self.current_step = 0
         self.prev_regs = {}
         self.prev_output_len = 0
-        # A safety limit for 'Run' to prevent infinite loop hangs
-        self.MAX_RUN_STEPS = 100000 
+        # Safety limit for 'Run' (5 million steps)
+        self.MAX_RUN_STEPS = 5000000 
 
     def execute(self, mode="step"):
         """
@@ -31,21 +31,27 @@ class RarsSession:
         mode: "step" (increment by 1) or "run" (go to max limit)
         """
         
-        # Determine the step limit for this execution
+        cmd = ["java", "-jar", RARS_JAR]
+
+        # Determine limits and flags based on mode
         if mode == "step":
             self.current_step += 1
             limit = self.current_step
+            # CRITICAL: We MUST ask for registers in Step mode to see changes
+            cmd += ALL_REGS
         elif mode == "run":
-            # For 'Run', we set a high limit relative to current
-            # This allows us to fast-forward
             limit = self.current_step + self.MAX_RUN_STEPS
+            # CRITICAL: We DO NOT ask for registers in Run mode.
+            # 1. It improves performance.
+            # 2. It prevents the "Input File interpreted as Source" bug in RARS CLI.
+            # If user hits breakpoint, they can Step once to see regs.
         else:
             limit = self.current_step
+            cmd += ALL_REGS
 
-        # Build Command
-        # java -jar rars.jar [regs...] [limit] filename [args...]
-        cmd = ["java", "-jar", RARS_JAR] + ALL_REGS + [str(limit), self.filename] + self.program_args
-
+        # Add limit, filename, and args
+        cmd += [str(limit), self.filename] + self.program_args
+        
         try:
             result = subprocess.run(cmd, capture_output=True, text=True)
         except FileNotFoundError:
@@ -58,19 +64,19 @@ class RarsSession:
         """
         Parses stdout from RARS to extract registers, output, and status.
         """
+        # 1. Check for Crashes/Errors immediately
+        if "Error in " in result.stdout or "terminated due to errors" in result.stdout:
+            return None, result.stdout, "error"
+
         output_lines = result.stdout.splitlines()
         regs = {}
         program_output = []
         status = "running"
         
-        # 1. Check for Crashes/Errors immediately
-        if "Error in " in result.stdout or "terminated due to errors" in result.stdout:
-            return None, result.stdout, "error"
-
-        # 2. Check for Breakpoints or Completion
-        # RARS usually prints "Execution paused at breakpoint" or similar text
-        is_paused = "paused at breakpoint" in result.stdout.lower()
-        
+        # 2. Check for Breakpoints
+        if "paused at breakpoint" in result.stdout.lower():
+            status = "breakpoint"
+            
         for line in output_lines:
             line = line.strip()
             if not line: continue
@@ -80,34 +86,33 @@ class RarsSession:
             if "Copyright" in line: continue
             if "step limit" in line: continue 
             
-            # Detect Breakpoint explicitly in output lines
-            if "paused at breakpoint" in line.lower():
-                status = "breakpoint"
-                continue
-
             parts = line.split()
             
-            # Parse Registers
+            # Parse Registers (Only present if we asked for them in 'step' mode)
             if len(parts) >= 2 and parts[0] in ALL_REGS:
                 try:
                     regs[parts[0]] = int(parts[1], 0)
                 except ValueError:
                     pass
             else:
-                # Capture standard program output (Print calls)
+                # Capture standard program output
                 program_output.append(line)
 
-        # 3. Detect Program Finish (Stack Pointer Check)
-        # If sp was non-zero before and is 0 now, RARS likely reset (finished)
+        # 3. Detect Program Finish
         sp_old = self.prev_regs.get("sp", 0)
         sp_now = regs.get("sp", 0)
         
-        # If we ran and didn't hit a breakpoint, and SP is 0, we finished.
-        if mode == "run" and status != "breakpoint":
-            if sp_now == 0 and sp_old != 0:
+        # Finish logic varies by mode
+        if mode == "run":
+            # In Run mode, we don't track SP (regs are hidden). 
+            # We assume finish if no breakpoint and no crash.
+            if status != "breakpoint":
+                status = "finished"
+        else:
+            # In Step mode, we check Stack Pointer reset
+            if sp_old != 0 and sp_now == 0:
                 status = "finished"
         
-        # Return format: (Registers, Full Text Output, Status String)
         return regs, "\n".join(program_output), status
 
     def print_changes(self, new_regs, full_output):
@@ -128,11 +133,12 @@ class RarsSession:
             if val_now != val_old:
                 changes.append(f"{r}: {val_old} -> {val_now}")
 
+        # Only print execution status if we have info or are stepping
         if changes:
             print(f"[{self.current_step}] " + ", ".join(changes))
-        else:
-            print(f"[{self.current_step}] Executed (No register changes)")
-
+        elif new_regs: # If we have regs but no changes (e.g. nop)
+             print(f"[{self.current_step}] Executed")
+        
         self.prev_regs = new_regs
 
 def main():
@@ -162,7 +168,6 @@ def main():
         if cmd == 'q':
             break
         
-        # --- EXECUTION LOGIC ---
         mode = "step"
         if cmd == 'r':
             mode = "run"
@@ -170,30 +175,20 @@ def main():
 
         regs, output, status = session.execute(mode)
 
-        # Handle Crash
         if status == "error":
             print(f"\n[System] Assembler Error - Execution Stopped:")
             print(output)
             break
             
-        # Handle Breakpoint
         if status == "breakpoint":
             print(f"\n[System] Paused at Breakpoint.")
-            # If we were running, we need to update our internal step count
-            # Note: RARS CLI doesn't easily give us the exact step count on break.
-            # We assume the user will inspect registers here.
+            # We don't have regs yet in Run mode, but user can hit Enter to see them next.
             
-        # Print what happened
         session.print_changes(regs, output)
 
-        # Handle Finish
         if status == "finished":
             print("\n[System] Program Finished Successfully.")
             break
-        
-        # If we ran fast, updating the step number for display is tricky
-        # because RARS resets every time.
-        # We assume the user continues stepping from where they left off visually.
 
 if __name__ == "__main__":
     main()
