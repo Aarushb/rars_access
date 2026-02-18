@@ -68,9 +68,12 @@ python rars_cli.py file.s arg1 arg2
 ```
 
 4. Once running, use the following commands:
-    * Enter: Step forward one instruction.
-    * r: Run until the program finishes or hits an `ebreak`.
-    * q: Quit.
+
+| Command | Action |
+| :--- | :--- |
+| Enter | Step forward one instruction. |
+| r | Run until the program finishes or hits an `ebreak`. |
+| q | Quit. |
 
 ## Conclusion
 
